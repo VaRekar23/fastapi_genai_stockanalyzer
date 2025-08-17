@@ -45,7 +45,7 @@ A sophisticated AI-powered stock analysis platform built with FastAPI and CrewAI
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/fastapi_genai_stockanalyzer.git
+   git clone https://github.com/VaRekar23/fastapi_genai_stockanalyzer.git
    cd fastapi_genai_stockanalyzer
    ```
 
