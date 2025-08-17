@@ -34,30 +34,63 @@ def build_agents():
     """
     
     llm = None
-
-    # Use OpenAI (primary choice for reasoning)
-    if os.getenv("OPENAI_API_KEY"):
-        print("Using OpenAI")
-        try:
-            try:
-                from langchain_openai import ChatOpenAI  # type: ignore
-            except Exception:
-                from langchain.chat_models import ChatOpenAI  # type: ignore
-            
-            # Use standard ChatOpenAI with temperature=0 for consistent, deterministic responses
-            llm = ChatOpenAI(temperature=0, model_name=OPENAI_MODEL)
-            print(f"Using {OPENAI_MODEL} with temperature=0")
-        except Exception as e:
-            print("OpenAI failed", e)
-            llm = None
-    else:
-        print("No OpenAI API key found")
-        llm = None
-
-    if llm is None:
-        raise RuntimeError(
-            "No compatible LLM configured. Set OPENAI_API_KEY in .env."
+    api_key = os.getenv("OPENAI_API_KEY")
+    
+    # Check if API key is available
+    if not api_key:
+        error_msg = (
+            "OPENAI_API_KEY environment variable not found. "
+            "Please set your OpenAI API key in Render environment variables."
         )
+        print(f"ERROR: {error_msg}")
+        raise RuntimeError(error_msg)
+    
+    print(f"OpenAI API key found (length: {len(api_key)})")
+    print(f"Using model: {OPENAI_MODEL}")
+    
+    # Use OpenAI (primary choice for reasoning)
+    try:
+        # Try the newer import first
+        try:
+            from langchain_openai import ChatOpenAI  # type: ignore
+            print("Successfully imported langchain_openai.ChatOpenAI")
+        except ImportError as ie:
+            print(f"langchain_openai import failed: {ie}")
+            try:
+                from langchain.chat_models import ChatOpenAI  # type: ignore
+                print("Successfully imported langchain.chat_models.ChatOpenAI")
+            except ImportError as ie2:
+                print(f"langchain.chat_models import also failed: {ie2}")
+                raise ImportError("Could not import ChatOpenAI from either langchain_openai or langchain.chat_models")
+        
+        # Initialize the LLM with proper error handling
+        try:
+            # For OpenAI 0.28.x, use different initialization
+            llm = ChatOpenAI(
+                openai_api_key=api_key,
+                temperature=0, 
+                model_name=OPENAI_MODEL,
+                max_retries=3,
+                request_timeout=30
+            )
+            print(f"ChatOpenAI initialized successfully with {OPENAI_MODEL}")
+            
+            # Test the connection with a simple call
+            try:
+                test_response = llm.invoke("Hello")
+                print("OpenAI connection test successful")
+            except Exception as test_error:
+                print(f"OpenAI connection test failed: {test_error}")
+                # Continue anyway, test might fail but agents can still work
+            
+        except Exception as init_error:
+            print(f"Failed to initialize ChatOpenAI: {init_error}")
+            raise RuntimeError(f"Failed to initialize OpenAI client: {init_error}")
+            
+    except Exception as e:
+        error_msg = f"Failed to set up OpenAI LLM: {str(e)}"
+        print(f"ERROR: {error_msg}")
+        raise RuntimeError(error_msg)
     
     print(f"LLM configured successfully: {type(llm).__name__}")
     print(f"LLM model: {getattr(llm, 'model_name', 'Unknown')}")

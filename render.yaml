@@ -18,5 +18,11 @@ services:
         value: 0.0.0.0
       - key: PORT
         value: 8000
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
     healthCheckPath: /health
     autoDeploy: true

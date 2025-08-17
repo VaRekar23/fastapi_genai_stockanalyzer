@@ -72,12 +72,31 @@ async def global_exception_handler(request: Request, exc: Exception):
 def timestamp(Input):
     logger.info(f"Step completed at: {datetime.now()}")
 
-# Initialize agents globally
+# Initialize agents globally with detailed error logging
 try:
-    agents = build_agents()
-    logger.info("Agents initialized successfully")
+    logger.info("Attempting to initialize agents...")
+    
+    # Check required environment variables
+    required_env_vars = ["OPENAI_API_KEY"]
+    missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+    
+    if missing_vars:
+        error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
+        logger.error(error_msg)
+        logger.error("Please set these variables in your Render dashboard under Environment Variables")
+        agents = None
+    else:
+        logger.info(f"Found required environment variables")
+        logger.info(f"OpenAI Model: {os.getenv('OPENAI_MODEL', 'gpt-4o-mini')}")
+        
+        agents = build_agents()
+        logger.info("✅ Agents initialized successfully")
+        
 except Exception as e:
-    logger.error(f"Failed to initialize agents: {e}")
+    logger.error(f"❌ Failed to initialize agents: {str(e)}")
+    logger.error(f"Error type: {type(e).__name__}")
+    import traceback
+    logger.error(f"Full traceback: {traceback.format_exc()}")
     agents = None
 
 @app.get("/")
