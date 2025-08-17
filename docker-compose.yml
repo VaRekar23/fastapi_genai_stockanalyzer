@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  stock-analyzer:
+    build: .
+    container_name: fastapi-stock-analyzer
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+      - HOST=0.0.0.0
+      - PORT=8000
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./app.log:/app/app.log
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - stock-analyzer-network
+
+  # Optional: Add Redis for caching in production
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: stock-analyzer-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - stock-analyzer-network
+
+networks:
+  stock-analyzer-network:
+    driver: bridge
+
+# volumes:
+#   redis_data:
