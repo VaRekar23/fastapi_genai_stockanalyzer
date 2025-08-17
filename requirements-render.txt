@@ -1,3 +1,7 @@
+# Build dependencies for Render
+setuptools>=67.0.0
+wheel>=0.40.0
+
 # Core FastAPI and web framework
 fastapi==0.116.1
 uvicorn[standard]==0.32.1
@@ -31,7 +35,3 @@ pydantic==2.10.4
 # Utilities
 colorama==0.4.6
 click==8.1.8
-
-# Build dependencies for Render
-setuptools>=65.0.0
-wheel>=0.38.0
