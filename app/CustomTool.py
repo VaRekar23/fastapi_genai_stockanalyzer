@@ -4,7 +4,118 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import time
+import random
 from datetime import datetime, timedelta
+from functools import wraps
+import logging
+from typing import Optional, Dict, Any
+import threading
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Global cache and rate limiting
+_cache = {}
+_cache_lock = threading.Lock()
+_last_request_time = 0
+_request_lock = threading.Lock()
+
+# Rate limiting configuration
+RATE_LIMIT_DELAY = 1.0  # Minimum seconds between requests
+CACHE_DURATION = 300    # 5 minutes cache duration
+MAX_RETRIES = 3
+BASE_BACKOFF = 2.0     # Base seconds for exponential backoff
+
+
+def _get_cache_key(func_name: str, symbol: str) -> str:
+    """Generate cache key for function and symbol."""
+    return f"{func_name}:{symbol.upper()}"
+
+
+def _get_cached_result(cache_key: str) -> Optional[Any]:
+    """Get cached result if available and not expired."""
+    with _cache_lock:
+        if cache_key in _cache:
+            result, timestamp = _cache[cache_key]
+            if time.time() - timestamp < CACHE_DURATION:
+                logger.info(f"Cache hit for {cache_key}")
+                return result
+            else:
+                # Remove expired cache entry
+                del _cache[cache_key]
+                logger.info(f"Cache expired for {cache_key}")
+    return None
+
+
+def _set_cached_result(cache_key: str, result: Any) -> None:
+    """Store result in cache with timestamp."""
+    with _cache_lock:
+        _cache[cache_key] = (result, time.time())
+        logger.info(f"Cached result for {cache_key}")
+
+
+def _enforce_rate_limit() -> None:
+    """Enforce rate limiting between API calls."""
+    global _last_request_time
+    with _request_lock:
+        current_time = time.time()
+        time_since_last = current_time - _last_request_time
+        if time_since_last < RATE_LIMIT_DELAY:
+            sleep_time = RATE_LIMIT_DELAY - time_since_last + random.uniform(0.1, 0.3)
+            logger.info(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
+            time.sleep(sleep_time)
+        _last_request_time = time.time()
+
+
+def _is_rate_limit_error(exception: Exception) -> bool:
+    """Check if exception is a rate limit error."""
+    error_str = str(exception).lower()
+    return any(phrase in error_str for phrase in [
+        '429', 'too many requests', 'rate limit', 'throttled',
+        'quota exceeded', 'limit exceeded'
+    ])
+
+
+def rate_limited_api_call(func_name: str, api_call_func, *args, **kwargs):
+    """Execute API call with rate limiting, caching, and retry logic."""
+    symbol = args[0] if args else kwargs.get('symbol', 'UNKNOWN')
+    cache_key = _get_cache_key(func_name, symbol)
+    
+    # Try cache first
+    cached_result = _get_cached_result(cache_key)
+    if cached_result is not None:
+        return cached_result
+    
+    # Execute API call with retries
+    last_exception = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            _enforce_rate_limit()
+            logger.info(f"API call attempt {attempt + 1}/{MAX_RETRIES} for {func_name}({symbol})")
+            
+            result = api_call_func(*args, **kwargs)
+            
+            # Cache successful result
+            _set_cached_result(cache_key, result)
+            return result
+            
+        except Exception as e:
+            last_exception = e
+            logger.warning(f"API call failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
+            
+            if _is_rate_limit_error(e):
+                # Exponential backoff for rate limit errors
+                backoff_time = BASE_BACKOFF ** (attempt + 1) + random.uniform(0.5, 2.0)
+                logger.warning(f"Rate limit detected, backing off for {backoff_time:.2f} seconds")
+                time.sleep(backoff_time)
+            elif attempt < MAX_RETRIES - 1:
+                # Short delay for other errors
+                time.sleep(1.0 + random.uniform(0.1, 0.5))
+    
+    # All retries failed
+    error_msg = f"All {MAX_RETRIES} attempts failed for {func_name}({symbol}). Last error: {last_exception}"
+    logger.error(error_msg)
+    return error_msg
 
 
 def safe_float(value):
@@ -81,8 +192,7 @@ def get_current_stock_price(symbol: str) -> str:
     Returns:
         str: The current stock price or error message.
     """
-    try:
-        time.sleep(0.2)
+    def _fetch_price_impl(symbol: str) -> str:
         # Try exact symbol first
         stock = yf.Ticker(symbol)
         current_price = stock.info.get("regularMarketPrice", stock.info.get("currentPrice"))
@@ -97,8 +207,8 @@ def get_current_stock_price(symbol: str) -> str:
             return f"{numeric_price:.2f}"
         except Exception:
             return str(current_price)
-    except Exception as e:
-        return f"Error fetching current price for {symbol}: {e}"
+    
+    return rate_limited_api_call("get_current_stock_price", _fetch_price_impl, symbol)
 
 
 @tool
@@ -111,7 +221,7 @@ def get_company_info(symbol: str):
     Returns:
         JSON containing company profile and current financial snapshot.
     """
-    try:
+    def _fetch_company_info_impl(symbol: str) -> str:
         # Try exact symbol, then NSE fallback
         ticker = yf.Ticker(symbol)
         company_info_full = ticker.info
@@ -159,7 +269,7 @@ def get_income_statements(symbol: str):
     Returns:
         JSON containing income statements or an empty dictionary.
     """
-    try:
+    def _fetch_income_statements_impl(symbol: str) -> str:
         # Try exact symbol, then NSE fallback
         stock = yf.Ticker(symbol)
         financials = getattr(stock, "financials", None)
@@ -169,14 +279,14 @@ def get_income_statements(symbol: str):
         if financials is None or getattr(financials, "empty", False):
             return json.dumps({})
         return financials.to_json(orient="index")
-    except Exception as e:
-        return f"Error fetching income statements for {symbol}: {e}"
+    
+    return rate_limited_api_call("get_income_statements", _fetch_income_statements_impl, symbol)
 
 
 @tool
 def get_balance_sheet(symbol: str):
     """Get the latest balance sheet for a given stock symbol as JSON."""
-    try:
+    def _fetch_balance_sheet_impl(symbol: str) -> str:
         stock = yf.Ticker(symbol)
         balance = getattr(stock, "balance_sheet", None)
         if (balance is None or getattr(balance, "empty", False)) and (not symbol.endswith(".NS")):
@@ -185,14 +295,14 @@ def get_balance_sheet(symbol: str):
         if balance is None or getattr(balance, "empty", False):
             return json.dumps({})
         return balance.to_json(orient="index")
-    except Exception as e:
-        return f"Error fetching balance sheet for {symbol}: {e}"
+    
+    return rate_limited_api_call("get_balance_sheet", _fetch_balance_sheet_impl, symbol)
 
 
 @tool
 def get_cashflow_statements(symbol: str):
     """Get the latest cashflow statements for a given stock symbol as JSON."""
-    try:
+    def _fetch_cashflow_statements_impl(symbol: str) -> str:
         stock = yf.Ticker(symbol)
         cashflow = getattr(stock, "cashflow", None)
         if (cashflow is None or getattr(cashflow, "empty", False)) and (not symbol.endswith(".NS")):
@@ -201,8 +311,8 @@ def get_cashflow_statements(symbol: str):
         if cashflow is None or getattr(cashflow, "empty", False):
             return json.dumps({})
         return cashflow.to_json(orient="index")
-    except Exception as e:
-        return f"Error fetching cashflow statements for {symbol}: {e}"
+    
+    return rate_limited_api_call("get_cashflow_statements", _fetch_cashflow_statements_impl, symbol)
 
 
 @tool("Analyze earnings quality and persistence")
