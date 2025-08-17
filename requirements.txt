@@ -37,11 +37,11 @@ jiter==0.9.1
 jsonpatch==1.33
 jsonpointer==3.0.0
 langchain
-langchain-community==0.0.20
+langchain-community
 langchain-core
 langchain-groq==0.1.10
 langchain-openai==0.1.25
-langsmith==0.1.147
+langsmith
 lxml==6.0.0
 markdown-it-py==3.0.0
 MarkupSafe==2.1.5
@@ -100,5 +100,6 @@ watchfiles==0.24.0
 websockets==13.1
 yarl==1.15.2
 yfinance==0.2.65
+
 
 
