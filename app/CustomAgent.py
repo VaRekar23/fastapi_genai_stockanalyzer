@@ -24,26 +24,6 @@ load_dotenv()
 # OpenAI models - budget-friendly for reasoning
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
-def check_available_models():
-    """Check which OpenAI models are available to your account."""
-    try:
-        import openai
-        # For openai version 0.28.1, use openai.Model.list()
-        models = openai.Model.list()
-        available_models = [model.id for model in models.data]
-        
-        # Filter for chat models (gpt models)
-        gpt_models = [m for m in available_models if m.startswith('gpt')]
-        
-        print("Available GPT models:")
-        for model in sorted(gpt_models):
-            print(f"  - {model}")
-        
-        return gpt_models
-    except Exception as e:
-        print(f"Could not check available models: {e}")
-        return []
-
 def build_agents():
     """Create and return all agents. Uses OpenAI for reasoning tasks.
 
@@ -52,8 +32,6 @@ def build_agents():
     - gpt-4o: Better reasoning, slightly higher cost
     - gpt-3.5-turbo: Good reasoning, lowest cost
     """
-    # Check what models are available
-    check_available_models()
     
     llm = None
 
