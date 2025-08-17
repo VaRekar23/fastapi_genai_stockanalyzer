@@ -15,7 +15,7 @@ langchain-community==0.0.20
 
 # OpenAI and other LLM providers
 openai==0.28.1
-langchain-openai==0.1.0
+langchain-openai==0.0.5
 
 # Data processing and analysis
 pandas==2.0.3
