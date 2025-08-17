@@ -145,8 +145,8 @@ def get_company_info(symbol: str):
             "Ebitda Margins": company_info_full.get("ebitdaMargins"),
         }
         return json.dumps(company_info_cleaned, default=str)
-    except Exception as e:
-        return f"Error fetching company profile for {symbol}: {e}"
+    
+    return rate_limited_api_call("get_company_info", _fetch_company_info_impl, symbol)
 
 
 @tool
