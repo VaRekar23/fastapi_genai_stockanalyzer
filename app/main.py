@@ -508,10 +508,11 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     import uvicorn
+    port = int(os.getenv("PORT", 8000))
     uvicorn.run(
         "app.main:app",
         host=os.getenv("HOST", "0.0.0.0"),
-        port=int(os.getenv("PORT", 8000)),
+        port=port,
         reload=os.getenv("APP_ENV", "development") == "development",
         log_level=os.getenv("LOG_LEVEL", "info").lower()
     )

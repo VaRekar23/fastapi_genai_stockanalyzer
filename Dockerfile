@@ -1,5 +1,5 @@
-# Use Python 3.8 slim image for production
-FROM python:3.8-slim
+# Use Python 3.11 slim image for production (better compatibility)
+FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
